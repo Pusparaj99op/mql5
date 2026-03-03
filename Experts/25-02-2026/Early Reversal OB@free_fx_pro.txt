@@ -1,0 +1,80 @@
+//@version=5
+indicator("Early Reversal OB", overlay=true, max_bars_back=500)
+
+// ==========================================================================================
+// INPUTS
+// ==========================================================================================
+colors = input.string(title='Color Scheme', defval='BRIGHT', options=['DARK', 'BRIGHT'])
+use_volume = input.bool(true, title="Gunakan Filter Volume", tooltip="Hanya memvalidasi jika candle konfirmasi memiliki volume tinggi (mencegah sinyal di pasar sepi).")
+min_bars_between = input.int(4, title="Jeda Bar Antar Sinyal", minval=1)
+
+bullcolor = colors == 'DARK' ? color.white : color.green
+bearcolor = colors == 'DARK' ? color.blue : color.red
+
+// ==========================================================================================
+// LOGIKA "CATCH THE BOTTOM / TOP" (Non-Repaint)
+// ==========================================================================================
+
+// Kita mengevaluasi data yang SUDAH DITUTUP secara permanen:
+// Candle [2] adalah si Order Block (titik pantul)
+// Candle [1] adalah candle Konfirmasi (yang membalikkan arah)
+
+// --- SYARAT BUY SEAWAL MUNGKIN ---
+// 1. Candle OB [2] adalah candle merah.
+// 2. Candle Konfirmasi [1] adalah candle hijau.
+// 3. Candle [1] berhasil menembus High candle [2] (Engulfing).
+// 4. Candle [2] adalah titik terendah lokal (Low [2] lebih rendah dari candle sebelumnya).
+bool is_bearish_2 = close[2] < open[2]
+bool is_bullish_1 = close[1] > open[1]
+bool engulf_bullish = close[1] > high[2]
+bool local_low = low[2] <= low[3] and low[2] <= low[4] // Memastikan ini benar-benar di dasar (akar)
+
+bool bull_cond = is_bearish_2 and is_bullish_1 and engulf_bullish and local_low
+
+// --- SYARAT SELL SEAWAL MUNGKIN ---
+// 1. Candle OB [2] adalah candle hijau.
+// 2. Candle Konfirmasi [1] adalah candle merah.
+// 3. Candle [1] berhasil menembus Low candle [2] (Engulfing).
+// 4. Candle [2] adalah titik tertinggi lokal (High [2] lebih tinggi dari candle sebelumnya).
+bool is_bullish_2 = close[2] > open[2]
+bool is_bearish_1 = close[1] < open[1]
+bool engulf_bearish = close[1] < low[2]
+bool local_high = high[2] >= high[3] and high[2] >= high[4] // Memastikan ini benar-benar di pucuk
+
+bool bear_cond = is_bullish_2 and is_bearish_1 and engulf_bearish and local_high
+
+// ==========================================================================================
+// FILTER VOLUME & SPAM
+// ==========================================================================================
+// Pastikan candle pendorong [1] memiliki volume di atas rata-rata
+avg_vol = ta.sma(volume, 20)
+if use_volume
+    bull_cond := bull_cond and (volume[1] > avg_vol[1])
+    bear_cond := bear_cond and (volume[1] > avg_vol[1])
+
+var int last_signal_bar = -999
+bool validBull = false
+bool validBear = false
+
+if bull_cond and (bar_index - last_signal_bar) >= min_bars_between
+    validBull := true
+    last_signal_bar := bar_index
+
+if bear_cond and (bar_index - last_signal_bar) >= min_bars_between
+    validBear := true
+    last_signal_bar := bar_index
+
+// ==========================================================================================
+// PLOTTING
+// ==========================================================================================
+// Offset -2: Panah akan digambar TEPAT di atas/bawah candle Order Block (titik paling ujung).
+// Sinyal ini baru akan muncul BERSAMAAN DENGAN DIBUKANYA candle ke-0 (setelah candle konfirmasi [1] selesai).
+plotshape(validBull, title='Buy', style=shape.triangleup, color=bullcolor, textcolor=bullcolor, size=size.tiny, location=location.belowbar, offset=-2, text=' Buy', editable = false)  
+plotshape(validBear, title='Sell', style=shape.triangledown, color=bearcolor, textcolor=bearcolor, size=size.tiny, location=location.abovebar, offset=-2, text=' Sell', editable = false)
+// ==========================================================================================
+
+// === Dashboard with Telegram Link ===
+var table myTable = table.new(position.top_center, 1, 1, border_width=1, frame_color=color.black, bgcolor=color.white)
+
+// Add Telegram Message to Dashboard
+table.cell(myTable, 0, 0, "Join Telegram @free_fx_pro", bgcolor=color.blue, text_color=color.white, text_size=size.normal)

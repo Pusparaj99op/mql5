@@ -1,0 +1,41 @@
+
+Below are the recommended pairs that we use.  I do NOT trade Indices, Crypto or Gold!
+
+Audcad/Audjpy/Euraud/Eurchf/Eurnzd/Gbpaud/Gbpusd/Nzdcad/Usdcad
+
+Recomended time frame is H1.
+
+I recommend a starting balance of $1000 USD with a lotsize of 0.01 to minimize drawdown.  Rememeber, trading is NOT a race, its a journey!
+Anything over 1% return a week is a WIN!
+
+-----------------------------IMPORTANT------------------------------------
+PLEASE CHANGE THE EA’S MAGIC NUMBER TO YOUR PHONE NUMBER IF YOU PLAN ON USING THIS FOR THE FTMO!
+PLEASE CHANGE THE EA’S MAGIC NUMBER TO YOUR PHONE NUMBER IF YOU PLAN ON USING THIS FOR THE FTMO!
+
+YOU WILL FIND THE MAGIC NUMBER AT THE TOP OF THE EA'S SETTINGS.
+-----------------------------IMPORTANT------------------------------------
+
+
+Please take the time to READ the following:
+In the world of Foreign Exchange (Forex) Trading, a Semi Expert Advisor (EA) is software that can execute trades for you based on the criteria that you have programmed into the ea without you being present at your computer. Expert advisors are most often used within the MetaTrader 4 or 5 forex trading platforms. These EAs are written in a programming language called MetaQuotes Language (MQL). At AnEasierWayToTrade we have developed a "Semi-Expert Advisor" (Semi-EA) to be used on MT5 (MT4 to be coming soon) that can help you to become profitable in the Foreign Exchange. Our Semi-EA is based on price action and the reaction of Moving Averages (Ma's) within the market.  We call it a "Semi Expert Advisor" because we want people to understand that from time to time you "may" have to intervene and we don't want to get into the legalities of telling people that it is 100% handsfree, however, my testimony is that I ONLY touch the Semi Expert Advisor on Friday afternoons at 2pm est to turn it off.  I, personally, don't like to hold trades over the weekend.  So I turn it off and close all running trades whether positive or negative.  I have NEVER had a losing day.
+"PAST PROFTIS DO NOT GUARANTEE FUTURE RESULTS!"
+
+
+Disclaimer:
+*Trading foreign exchange on margin carries a high level of risk, and may not be suitable for all investors. Before deciding to trade foreign exchange and/or using the AnEasierWayToTrade Semi-Expert Advisor,you should carefully consider your investment objectives, level of experience, and risk appetite. The possibility exists that you could sustain a loss of some or all of your initial investment and therefore you should not invest money that you cannot afford to lose. You should be aware of all the risks associated with foreign exchange trading, and seek advice from an independent financial advisor if you have any doubts. The AnEasierWayTotrade Expert Advisor does not guarantee any wins or losses and is simply used at the users own expense. An Easier Way To Trade takes NO responsibility in the success or failure of your trading experience. This Expert Advisor should be used with your regular trading experience and is NOT an “automatic trading bot”. The user must have hands own to use this semi-expert advisor.
+
+
+??For More Free EA, Indicators, Trading Systems, Video course Vist
+>>>>> https://ForexCracked.com
+
+??Join Our Telegram Group To Discus Further About These 
+>>>>> https://t.me/fxcracked
+
+??Join Discord Channel to Download and test Profitable EAs:
+>>>>> https://discord.gg/43P5CRk
+
+??Review your Favorites, Profitable, Scam , fraud EA here
+>>>>> https://www.fxcracked.com/
+
+??Our forum
+>>>>> https://www.JustForForex.com/

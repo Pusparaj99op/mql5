@@ -1,0 +1,133 @@
+Adding required servers in the list of allowed URLs
+
+Open your MT4/MT5 terminal, go to the "Tools" menu and select “Options”. You can also press Ctrl+O to get to this menu quickly next time. Click on the “Expert Advisors“ tab. Here you should allow requests to:
+
+
+http://nfs.faireconomy.media/ff_calendar_thisweek.xml 
+https://ec.forexprostools.com/
+https://www.worldtimeserver.com
+https://nfs.faireconomy.media
+https://topeastore.com/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Forex Trading Tools 
+Website: www.TopEAstore.com
+Group: https://t.me/BestForexTool
+
+
+Here you will find everything you need for trading: 
+advisors, indicators, systems
+With the best price.
+
+Auto Purchase (Always Instant Download After Purchase)
+Premium EAs: https://shoppy.gg/@FXstore1
+Support: https://t.me/TopEAstore_Admin
+Always free updates for buyers
+
+Buy a lot at a discounted price.
+$100 package: for any 8 EAs.
+$500 Package: you get added to Premium Channel. 
+A place to share a lot of the paid EAs I'm selling.
+One time payment. No accumulation through previous purchases.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Forex Trading Tools 
+Website: www.TopEAstore.com
+Group: https://t.me/BestForexTool
+
+
+Here you will find everything you need for trading: 
+advisors, indicators, systems
+With the best price.
+
+Auto Purchase (Always Instant Download After Purchase)
+Premium EAs: https://shoppy.gg/@FXstore1
+Support: https://t.me/TopEAstore_Admin
+Always free updates for buyers
+
+Buy a lot at a discounted price.
+$100 package: for any 8 EAs.
+$500 Package: you get added to Premium Channel. 
+A place to share a lot of the paid EAs I'm selling.
+One time payment. No accumulation through previous purchases.
+
+
+
+
+
+
+
+
+
+

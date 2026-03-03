@@ -1,0 +1,279 @@
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Original work:
+// - Trendline Breakouts With Targets [ChartPrime] © ChartPrime (MPL 2.0)
+//
+// Modifications:
+// - Visual/UI enhancements, alerts, label tweaks, TP/SL lines & labels, configurable RR © SilverHawk
+
+//@version=5
+indicator("SilverHawk Trendline Breakouts", shorttitle="SH Breakouts", overlay=true,
+     max_bars_back=500, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+
+// ──────────────────────────────────────────────────────────────────────────────
+// STYLE
+// ──────────────────────────────────────────────────────────────────────────────
+string STYLE = "➞ Style 🔸"
+
+bullZoneCol = input.color(color.rgb(0, 170, 90),   "Bull Zone",       group=STYLE, inline="z1")
+bullTr      = input.int(78, "", minval=0, maxval=100, group=STYLE, inline="z1")
+
+bearZoneCol = input.color(color.rgb(220, 70, 60),  "Bear Zone",       group=STYLE, inline="z2")
+bearTr      = input.int(78, "", minval=0, maxval=100, group=STYLE, inline="z2")
+
+bandCol     = input.color(color.rgb(120, 120, 120),"Neutral Band",   group=STYLE, inline="z3")
+bandTr      = input.int(88, "", minval=0, maxval=100, group=STYLE, inline="z3")
+
+targetCol   = input.color(color.rgb(190, 140, 40), "Target Color",   group=STYLE, inline="t1")
+targetWidth = input.int(2, "", minval=1, maxval=4,   group=STYLE, inline="t1")
+targetStyle = input.string("Dashed", "Target Style", options=["Solid","Dashed","Dotted"], group=STYLE)
+
+slCol       = input.color(color.rgb(240, 60, 60),  "SL Color",        group=STYLE, inline="t2")
+showSL      = input.bool(true, "Show SL Line & Label", group=STYLE, inline="t2")
+
+longSigCol  = input.color(color.rgb(0, 200, 100),  "Long Signal",     group=STYLE, inline="s1")
+shortSigCol = input.color(color.rgb(240, 60, 60),  "Short Signal",    group=STYLE, inline="s1")
+
+styleSwitcher(s) =>
+    switch s
+        "Dotted" => line.style_dotted
+        "Solid"  => line.style_solid
+        => line.style_dashed
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CORE SETTINGS
+// ──────────────────────────────────────────────────────────────────────────────
+string CORE = "➞ Core Settings 🔸"
+
+Period      = input.int(10, "Period", group=CORE, inline="001")
+Trendtype   = input.string("Wicks", "Type", options=["Wicks","Body"], group=CORE, inline="001") == "Wicks"
+Extensions  = input.string("25", "Extend", options=["25","50","75"], group=CORE, inline="001")
+ShowTargets = input.bool(true, "Show Targets", group=CORE, inline="002")
+
+// Risk:Reward Ratio (dropdown, default 1:2)
+rrRatioStr  = input.string("2.0", "Risk:Reward Ratio", options=["1.0", "2.0", "3.0"], group=CORE)
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ALERT SETTINGS
+// ──────────────────────────────────────────────────────────────────────────────
+string ALERTS = "➞ Alerts 🔔"
+alertsOn   = input.bool(true,  "Enable Alerts", group=ALERTS)
+al_brkBull = input.bool(true,  "Breakout Bullish", group=ALERTS, inline="a1")
+al_brkBear = input.bool(true,  "Breakout Bearish", group=ALERTS, inline="a1")
+al_tpHits  = input.bool(true,  "TP Hit", group=ALERTS, inline="a2")
+al_slHits  = input.bool(true,  "SL Hit", group=ALERTS, inline="a2")
+
+// ──────────────────────────────────────────────────────────────────────────────
+// STATE VARIABLES
+// ──────────────────────────────────────────────────────────────────────────────
+var bool  TradeisON  = false
+var bool  LongTrade  = false
+var bool  ShortTrade = false
+var float TP         = 0.0
+var float SL         = 0.0
+
+int BarTIME = time - time[1]
+
+var line  tpLine = na
+var line  slLine = na
+var label LAB_TP = na
+var label LAB_SL = na
+
+var int   UpdatedX      = 0
+var float UpdatedY      = 0.0
+var float UpdatedSLP    = 0.0
+var int   UpdatedXLow   = 0
+var float UpdatedYLow   = 0.0
+var float UpdatedSLPLow = 0.0
+
+int RB = math.max(1, int(math.floor(Period / 2)))
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VOLATILITY ADJUSTMENT
+// ──────────────────────────────────────────────────────────────────────────────
+volAdj(len) =>
+    (math.min(ta.atr(len) * 0.3, close * (0.3 / 100)))[20] / 2
+
+Zband = volAdj(30)
+
+// ──────────────────────────────────────────────────────────────────────────────
+// EXTENSION SWITCHER
+// ──────────────────────────────────────────────────────────────────────────────
+ExtenSwitcher(ex) =>
+    switch ex
+        "25" => 1
+        "50" => 2
+        => 3
+
+// ──────────────────────────────────────────────────────────────────────────────
+// TRENDLINE CALCULATION
+// ──────────────────────────────────────────────────────────────────────────────
+Trendlines(src, timeIndex, dir) =>
+    var int   Start  = 1
+    var int   End    = 0
+    var int   TIME   = 1
+    var float YStart = 0.0
+    var float YEnd   = 0.0
+    var float Slope  = 0.0
+
+    var line Line1 = line.new(na, na, na, na)
+    var line Line2 = line.new(na, na, na, na)
+    var line Line3 = line.new(na, na, na, na)
+
+    SCR = fixnan(src)
+
+    if ta.change(SCR) != 0
+        TIME   := time[timeIndex]
+        YStart := SCR[1]
+        Start  := TIME[1]
+        Slope  := (SCR - YStart) / (TIME - Start)
+
+    int EXTime = ExtenSwitcher(Extensions) * BarTIME * 25
+    End  := TIME + EXTime
+    YEnd := SCR + EXTime * Slope
+
+    if ta.change(SCR) != 0 and not TradeisON[1]
+        bullFill = color.new(bullZoneCol, bullTr)
+        bearFill = color.new(bearZoneCol, bearTr)
+        bandFill = color.new(bandCol, bandTr)
+
+        LineCond = Slope * time < 0 ? (dir ? na : bullFill) : (dir ? bearFill : na)
+
+        if not na(LineCond)
+            Line1 := line.new(Start, YStart, End, YEnd, xloc.bar_time, extend.none, color=color.new(color.white, 100))
+            Line2 := line.new(Start, YStart - (Zband * 2), End, YEnd - (Zband * 2), xloc.bar_time, extend.none, color=color.new(color.black, 100))
+            Line3 := line.new(Start, YStart - (Zband * 1), End, YEnd - (Zband * 1), xloc.bar_time, extend.none, color=color.new(color.black, 100))
+            linefill.new(Line3, Line2, color=bandFill)
+            linefill.new(Line3, Line1, color=LineCond)
+
+    [Start, YStart, Slope]
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PIVOTS + CROSS DETECTION
+// ──────────────────────────────────────────────────────────────────────────────
+PH = ta.pivothigh(Trendtype ? high : close > open ? close : open, Period, RB)
+PL = ta.pivotlow( Trendtype ? low  : close > open ? open  : close, Period, RB)
+
+GetlinePrice(TIME, Price, SLOP, LookB) =>
+    EsTime = time - TIME
+    Price + (EsTime - LookB * BarTIME) * SLOP
+
+CheckCross(Price, StartTime, StartPrice, SLP) =>
+    var float Current  = 0.0
+    var float Previous = 0.0
+    if StartPrice[Period] != StartPrice
+        Current  := GetlinePrice(StartTime, StartPrice, SLP, 0)
+        Previous := GetlinePrice(StartTime, StartPrice, SLP, 1)
+        Price[1] < Previous and Price > Current ? 1 :
+         Price[1] > Previous - (Zband * 0.1) and Price < Current - (Zband * 0.1) ? -1 : 0
+
+[Xx,  XZ,  SLPXZ ] = Trendlines(PH, RB, false)
+[XxL, XZL, SLPXZL] = Trendlines(PL, RB, true)
+
+if ta.change(fixnan(PH)) != 0
+    UpdatedX   := Xx
+    UpdatedY   := XZ
+    UpdatedSLP := SLPXZ
+
+if ta.change(fixnan(PL)) != 0
+    UpdatedXLow   := XxL
+    UpdatedYLow   := XZL
+    UpdatedSLPLow := SLPXZL
+
+Long  = not (UpdatedSLP * time > 0) and CheckCross(close, UpdatedX, UpdatedY, UpdatedSLP) == 1 and not TradeisON
+Short = not (UpdatedSLPLow * time < 0) and CheckCross(close, UpdatedXLow, UpdatedYLow, UpdatedSLPLow) == -1 and not TradeisON
+
+TradeFire = Long or Short
+
+if Long and not TradeisON
+    LongTrade  := true
+    ShortTrade := false
+
+if Short and not TradeisON
+    LongTrade  := false
+    ShortTrade := true
+
+// ──────────────────────────────────────────────────────────────────────────────
+// TARGETS + TP/SL HIT DETECTION + CONFIGURABLE RR
+// ──────────────────────────────────────────────────────────────────────────────
+bool longTPHit  = LongTrade  and TradeisON and high  >= TP
+bool longSLHit  = LongTrade  and TradeisON and close <= SL
+bool shortTPHit = ShortTrade and TradeisON and low   <= TP
+bool shortSLHit = ShortTrade and TradeisON and close >= SL
+
+if TradeFire and not TradeisON
+    float riskDistance = Zband * 20
+    float rrValue = str.tonumber(rrRatioStr)          // Convert dropdown to number
+    float rewardDistance = riskDistance * rrValue     // Default 2.0 → 1:2
+
+    TP := Long ? high + rewardDistance : low - rewardDistance
+    SL := Long ? low  - riskDistance   : high + riskDistance
+
+    TradeisON := true
+
+    if ShowTargets
+        // TP line & label
+        line.new(bar_index, Long ? high : low, bar_index, TP, width=targetWidth, color=targetCol, style=styleSwitcher(targetStyle))
+        tpLine := line.new(bar_index, TP, bar_index + 2, TP, width=targetWidth, color=targetCol, style=styleSwitcher(targetStyle))
+        LAB_TP := label.new(bar_index, TP, "TP", color=targetCol, style=label.style_label_left, size=size.small, textcolor=color.white)
+
+        // SL line & label
+        if showSL
+            line.new(bar_index, Long ? low : high, bar_index, SL, width=targetWidth, color=slCol, style=styleSwitcher(targetStyle))
+            slLine := line.new(bar_index, SL, bar_index + 2, SL, width=targetWidth, color=slCol, style=styleSwitcher(targetStyle))
+            LAB_SL := label.new(bar_index, SL, "SL", color=slCol, style=label.style_label_right, size=size.small, textcolor=color.white)
+
+if TradeisON
+    if not na(tpLine)
+        line.set_x2(tpLine, bar_index)
+    if not na(LAB_TP)
+        label.set_x(LAB_TP, bar_index + 1)
+
+    if not na(slLine)
+        line.set_x2(slLine, bar_index)
+    if not na(LAB_SL)
+        label.set_x(LAB_SL, bar_index + 1)
+
+if LongTrade and TradeisON
+    if high >= TP
+        if not na(LAB_TP)
+            label.set_color(LAB_TP, color.new(longSigCol, 70))
+        TradeisON := false
+    if close <= SL
+        if not na(LAB_SL)
+            label.set_color(LAB_SL, color.new(shortSigCol, 70))
+        TradeisON := false
+else if ShortTrade and TradeisON
+    if low <= TP
+        if not na(LAB_TP)
+            label.set_color(LAB_TP, color.new(longSigCol, 70))
+        TradeisON := false
+    if close >= SL
+        if not na(LAB_SL)
+            label.set_color(LAB_SL, color.new(shortSigCol, 70))
+        TradeisON := false
+
+// ──────────────────────────────────────────────────────────────────────────────
+// VISUAL SIGNALS
+// ──────────────────────────────────────────────────────────────────────────────
+bullBreakTrig = Long  and not TradeisON[1]
+bearBreakTrig = Short and not TradeisON[1]
+
+plotshape(bullBreakTrig, color=color.new(longSigCol, 0),  location=location.belowbar, style=shape.triangleup,   size=size.small, text="")
+plotshape(bearBreakTrig, color=color.new(shortSigCol, 0), location=location.abovebar, style=shape.triangledown, size=size.small, text="")
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ALERT CONDITIONS
+// ──────────────────────────────────────────────────────────────────────────────
+alertcondition(alertsOn and al_brkBull and bullBreakTrig, "SH Breakout Bullish", "Bullish breakout detected")
+alertcondition(alertsOn and al_brkBear and bearBreakTrig, "SH Breakout Bearish", "Bearish breakout detected")
+alertcondition(alertsOn and al_tpHits and (longTPHit or shortTPHit), "SH TP Hit", "Target hit")
+alertcondition(alertsOn and al_slHits and (longSLHit or shortSLHit), "SH SL Hit", "Stop loss hit")
+// ==========================================================================================
+
+// === Dashboard with Telegram Link ===
+var table myTable = table.new(position.top_center, 1, 1, border_width=1, frame_color=color.black, bgcolor=color.white)
+
+// Add Telegram Message to Dashboard
+table.cell(myTable, 0, 0, "Join Telegram @free_fx_pro", bgcolor=color.blue, text_color=color.white, text_size=size.normal)

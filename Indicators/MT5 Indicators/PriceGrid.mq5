@@ -1,0 +1,169 @@
+//+------------------------------------------------------------------+
+//|                                                    PriceGrid.mq5 |
+//|                               Copyright © 2016, Nikolay Kositsin | 
+//|                              Khabarovsk,   farria@mail.redcom.ru | 
+//+------------------------------------------------------------------+
+//---- авторство индикатора
+#property copyright "Copyright © 2016, Nikolay Kositsin"
+//---- ссылка на сайт автора
+#property link      "farria@mail.redcom.ru"
+//---- номер версии индикатора
+#property version   "1.00"
+//---- отрисовка индикатора в главном окне
+#property indicator_chart_window 
+//---- дл€ расчЄта и отрисовки индикатора не используютс€ буферы
+#property indicator_buffers 0
+//---- не используютс€ графические построени€
+#property indicator_plots  0
+//+-----------------------------------+
+//|  объ€вление перечислени€          |
+//+-----------------------------------+
+enum Number
+  {
+   Number_0,
+   Number_1,
+   Number_2,
+   Number_3
+  };
+//+-----------------------------------+
+//|  объ€вление перечислени€          |
+//+-----------------------------------+  
+enum Width
+  {
+   Width_1=1, //1
+   Width_2,   //2
+   Width_3,   //3
+   Width_4,   //4
+   Width_5    //5
+  };
+//+-----------------------------------+
+//|  объ€вление перечислени€          |
+//+-----------------------------------+
+enum STYLE
+  {
+   SOLID_,//—плошна€ лини€
+   DASH_,//Ўтрихова€ лини€
+   DOT_,//ѕунктирна€ лини€
+   DASHDOT_,//Ўтрих-пунктирна€ лини€
+   DASHDOTDOT_   //Ўтрих-пунктирна€ лини€ с двойными точками
+  };
+//+----------------------------------------------+
+//| ¬ходные параметры индикатора                 |
+//+----------------------------------------------+
+input string  SirName="PriceGrid";          //ѕерва€ часть имени графических объектов
+input uint  Digits_=2;                      //разр€д сетки
+input uint  Total=20;                        //количество блоков сетки сверху или снизу от цены
+input color  Color_ = clrBlueViolet;        //цвет уровн€
+input STYLE  Style_ = DASHDOTDOT_;          //стиль линии уровн€
+input Width  Width_ = Width_1;              //толщина линии уровн€ 
+//+----------------------------------------------+
+int middle,size;
+string ObjectNames[];
+double Pow10,PointPow10,PriceGrid[],Price[];
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+  
+void OnInit()
+  {
+//---- распределение пам€ти под массивы переменных  
+   size=int(Total*2);
+   ArrayResize(ObjectNames,size);
+   ArrayResize(PriceGrid,size);
+   ArrayResize(Price,size);
+//---- инициализаци€ имЄн
+   for(int count=0; count<size; count++) ObjectNames[count]=SirName+" PriceLine "+string(count);
+//---- инициализаци€ переменных         
+   Pow10=MathPow(10,Digits_);
+   PointPow10=_Point*Pow10;
+   middle=(size/2)-1;
+//---- инициализаци€ переменных         
+   for(int count=middle; count<size; count++) PriceGrid[count]=+PointPow10*(count-middle);  
+   for(int count=middle-1; count>=0; count--) PriceGrid[count]=-PointPow10*(middle-count);
+//----
+  }
+//+------------------------------------------------------------------+
+//| Custom indicator deinitialization function                       |
+//+------------------------------------------------------------------+    
+void OnDeinit(const int reason)
+  {
+//----
+   for(int count=0; count<size; count++) ObjectDelete(0,ObjectNames[count]);
+//----
+  }
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+int OnCalculate(
+                const int rates_total,    // количество истории в барах на текущем тике
+                const int prev_calculated,// количество истории в барах на предыдущем тике
+                const datetime &time[],
+                const double &open[],
+                const double& high[],     // ценовой массив максимумов цены дл€ расчЄта индикатора
+                const double& low[],      // ценовой массив минимумов цены  дл€ расчЄта индикатора
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[]
+                )
+  {
+//----   
+  double res=PointPow10*MathFloor(close[rates_total-1]/PointPow10);
+  for(int count=0; count<size; count++) Price[count]=res+PriceGrid[count];    
+  for(int count=0; count<size; count++) SetHline(0,ObjectNames[count],0,Price[count],Color_,Style_,Width_,ObjectNames[count]+DoubleToString(Price[count],_Digits));
+//----
+   ChartRedraw(0);
+//----   
+   return(rates_total);
+  }
+//+------------------------------------------------------------------+
+//|  —оздание горизонтального, ценового уровн€                       |
+//+------------------------------------------------------------------+
+void CreateHline
+(
+ long   chart_id,      // идентификатор графика
+ string name,          // им€ объекта
+ int    nwin,          // индекс окна
+ double price,         // ценовой уровень
+ color  Color,         // цвет линии
+ int    style,         // стиль линии
+ int    width,         // толщина линии
+ string text           // текст
+ )
+//---- 
+  {
+//----
+   ObjectCreate(chart_id,name,OBJ_HLINE,0,0,price);
+   ObjectSetInteger(chart_id,name,OBJPROP_COLOR,Color);
+   ObjectSetInteger(chart_id,name,OBJPROP_STYLE,style);
+   ObjectSetInteger(chart_id,name,OBJPROP_WIDTH,width);
+   ObjectSetString(chart_id,name,OBJPROP_TEXT,text);
+   ObjectSetInteger(chart_id,name,OBJPROP_BACK,true);
+//----
+  }
+//+------------------------------------------------------------------+
+//|  ѕереустановка горизонтального, ценового уровн€                  |
+//+------------------------------------------------------------------+
+void SetHline
+(
+ long   chart_id,      // идентификатор графика
+ string name,          // им€ объекта
+ int    nwin,          // индекс окна
+ double price,         // ценовой уровень
+ color  Color,         // цвет линии
+ int    style,         // стиль линии
+ int    width,         // толщина линии
+ string text           // текст
+ )
+//---- 
+  {
+//----
+   if(ObjectFind(chart_id,name)==-1) CreateHline(chart_id,name,nwin,price,Color,style,width,text);
+   else
+     {
+      //ObjectSetDouble(chart_id,name,OBJPROP_PRICE,price);
+      ObjectSetString(chart_id,name,OBJPROP_TEXT,text);
+      ObjectMove(chart_id,name,0,0,price);
+     }
+//----
+  }
+//+------------------------------------------------------------------+
