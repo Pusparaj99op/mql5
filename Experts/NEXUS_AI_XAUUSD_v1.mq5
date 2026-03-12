@@ -6,7 +6,6 @@
 #property copyright "NEXUS AI Trading Systems"
 #property version   "2.00"
 #property description "Profitable XAUUSD Scalping EA — M5 with H1 HTF Bias"
-#property strict
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -91,8 +90,8 @@ int           g_consecLosses   = 0;
 datetime      g_pauseUntil     = 0;
 datetime      g_dayResetTime   = 0;
 
-double        g_totalTrades    = 0;
-double        g_totalWins      = 0;
+int           g_totalTrades    = 0;
+int           g_totalWins      = 0;
 double        g_adaptiveMult   = 1.0;
 
 #define STATS_SIZE 40
@@ -141,6 +140,10 @@ int OnInit()
    g_startEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    g_peakEquity  = g_startEquity;
 
+   // Seed Kalman filter with current market price to avoid cold-start divergence
+   kf_x = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   if(kf_x <= 0) kf_x = 0.0;  // fallback if price not yet available
+
    Print("====================================================");
    Print(" NEXUS AI v2.0 | XAUUSD M5 | Magic:", InpMagicNumber);
    Print(" Equity: $", DoubleToString(g_startEquity,2),
@@ -159,10 +162,10 @@ void OnDeinit(const int reason)
    for(int i=0;i<8;i++) IndicatorRelease(handles[i]);
 
    double finalEq = AccountInfoDouble(ACCOUNT_EQUITY);
-   double wr = (g_totalTrades>0) ? g_totalWins/g_totalTrades*100.0 : 0;
+   double wr = (g_totalTrades>0) ? (double)g_totalWins/g_totalTrades*100.0 : 0;
    Print("====================================================");
    Print(" NEXUS SESSION END");
-   Print(" Trades: ",(int)g_totalTrades," | WinRate: ",DoubleToString(wr,1),"%");
+   Print(" Trades: ",g_totalTrades," | WinRate: ",DoubleToString(wr,1),"%");
    Print(" Net P&L: $",DoubleToString(finalEq-g_startEquity,2));
    Print("====================================================");
 }
@@ -177,6 +180,7 @@ void OnTick()
 
    if(!SafetyCheck()) return;
    ManagePositions();
+   DrawDashboard();  // Update HUD on every tick (OpenTrade also calls this)
 
    static datetime s_lastBar = 0;
    datetime curBar = iTime(_Symbol, PERIOD_M5, 0);
@@ -700,8 +704,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    g_statPnL[g_statIdx]=pnl;
    g_statIdx=(g_statIdx+1)%STATS_SIZE;
 
-   double wr=(g_totalTrades>0)?g_totalWins/g_totalTrades*100.0:0;
-   Print(StringFormat("NEXUS CLOSED: P&L=$%.2f | DayPnL=$%.2f | WR=%.1f%% | CL=%d | Mult=%.2f",
+   double wr=(g_totalTrades>0)?(double)g_totalWins/g_totalTrades*100.0:0; P&L=$%.2f | DayPnL=$%.2f | WR=%.1f%% | CL=%d | Mult=%.2f",
          pnl,g_dailyPnL,wr,g_consecLosses,g_adaptiveMult));
 
    DrawDashboard();
@@ -712,7 +715,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 //+------------------------------------------------------------------+
 double WinRate(int n)
 {
-   int cnt=MathMin(n,(int)g_totalTrades);
+   int cnt=MathMin(n, g_totalTrades);
    if(cnt==0) return 0.5;
    double w=0;
    for(int i=0;i<cnt;i++)
@@ -724,25 +727,25 @@ double WinRate(int n)
 }
 double AvgWin()
 {
+   int n=MathMin(g_totalTrades, STATS_SIZE);
    double s=0; int c=0;
-   int n=MathMin((int)g_totalTrades,STATS_SIZE);
    for(int i=0;i<n;i++)
    {
       int idx=((g_statIdx-1-i)+STATS_SIZE)%STATS_SIZE;
-      if(g_statWin[idx]>0&&g_statPnL[idx]>0){s+=g_statPnL[idx];c++;}
+      if(g_statWin[idx]>0 && g_statPnL[idx]>0){s+=g_statPnL[idx]; c++;}
    }
-   return c>0?s/c:1.0;
+   return c>0 ? s/c : 1.0;
 }
 double AvgLoss()
 {
+   int n=MathMin(g_totalTrades, STATS_SIZE);
    double s=0; int c=0;
-   int n=MathMin((int)g_totalTrades,STATS_SIZE);
    for(int i=0;i<n;i++)
    {
       int idx=((g_statIdx-1-i)+STATS_SIZE)%STATS_SIZE;
-      if(g_statWin[idx]==0&&g_statPnL[idx]<0){s+=MathAbs(g_statPnL[idx]);c++;}
+      if(g_statWin[idx]==0 && g_statPnL[idx]<0){s+=MathAbs(g_statPnL[idx]); c++;}
    }
-   return c>0?s/c:1.0;
+   return c>0 ? s/c : 1.0;
 }
 
 int CountByType(ENUM_POSITION_TYPE pt)
@@ -772,14 +775,14 @@ void DrawDashboard()
 {
    double eq  = AccountInfoDouble(ACCOUNT_EQUITY);
    double dd  = (g_peakEquity>0)?(g_peakEquity-eq)/g_peakEquity*100.0:0;
-   double wr  = (g_totalTrades>0)?g_totalWins/g_totalTrades*100.0:0;
+   double wr  = (g_totalTrades>0)?(double)g_totalWins/g_totalTrades*100.0:0;
    bool   ses = IsSession();
 
    string lines[7];
    lines[0]=StringFormat("NEXUS AI v2.0  |  %s  |  %s",_Symbol,ses?"ACTIVE":"OFF");
    lines[1]=StringFormat("Equity: $%.2f  |  Peak DD: %.1f%%",eq,dd);
    lines[2]=StringFormat("Day P&L: $%.2f  |  Trades: %d/%d",g_dailyPnL,g_dailyTrades,InpMaxDailyTrades);
-   lines[3]=StringFormat("Total: %d  |  WinRate: %.1f%%",(int)g_totalTrades,wr);
+   lines[3]=StringFormat("Total: %d  |  WinRate: %.1f%%",g_totalTrades,wr);
    lines[4]=StringFormat("Adapt: %.2f  |  ConsecLoss: %d",g_adaptiveMult,g_consecLosses);
    lines[5]=StringFormat("AvgWin: $%.2f  |  AvgLoss: $%.2f",AvgWin(),AvgLoss());
    lines[6]=(TimeCurrent()<g_pauseUntil)?

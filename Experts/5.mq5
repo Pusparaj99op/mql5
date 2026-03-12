@@ -7,7 +7,6 @@
 #property copyright   "XAUUSD Scalper EA v2.0"
 #property link        ""
 #property version     "2.00"
-#property strict
 
 //--- Include native MT5 libraries
 #include <Trade\Trade.mqh>

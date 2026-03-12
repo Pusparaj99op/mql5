@@ -23,7 +23,6 @@
 #property link        ""
 #property version     "1.00"
 #property description "Advanced quantitative XAUUSD scalper with self-correction"
-#property strict
 
 //+------------------------------------------------------------------+
 //| Module Includes                                                   |

@@ -8,7 +8,6 @@
 #property link        ""
 #property version     "3.00"
 #property description "Advanced XAUUSD M5 Scalper | Adaptive Quant | Self-Correcting"
-#property strict
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -91,6 +90,9 @@ input bool   InpShowPanel      = true;   // Show Dashboard Panel
 input color  InpBuyColor       = clrDodgerBlue;
 input color  InpSellColor      = clrOrangeRed;
 
+input group "=== EA IDENTITY ==="
+input int    InpMagicNumber    = 202412; // EA Magic Number
+
 //===================================================================
 // GLOBAL VARIABLES & STRUCTURES
 //===================================================================
@@ -104,16 +106,6 @@ CSymbolInfo    symInfo;
 int hEMAFast, hEMAMed, hEMASlow, hEMATrend;
 int hRSI, hBB, hATR, hMACD, hStoch, hCCI, hADX, hMom;
 
-// Struct: trade record for self-correction
-struct TradeRecord {
-   double profit;
-   double pips;
-   bool   isWin;
-   int    signal;  // 1=buy, -1=sell
-};
-
-TradeRecord g_history[];
-int         g_historyCount = 0;
 int         g_totalDeals   = 0;
 
 // Kalman Filter state
@@ -158,7 +150,7 @@ int OnInit() {
    symInfo.RefreshRates();
 
    // Initialize CTrade
-   trade.SetExpertMagicNumber(202412);
+   trade.SetExpertMagicNumber(InpMagicNumber);
    trade.SetDeviationInPoints(30);
    trade.SetTypeFilling(ORDER_FILLING_IOC);
    trade.LogLevel(LOG_LEVEL_ERRORS);
@@ -184,9 +176,6 @@ int OnInit() {
       Print("ERROR: Failed to create one or more indicator handles!");
       return INIT_FAILED;
    }
-
-   // Initialize trade history array
-   ArrayResize(g_history, 500);
 
    // Initialize daily tracking
    g_dayStartBalance = accInfo.Balance();
@@ -246,7 +235,6 @@ void OnTick() {
 
    // --- Market environment checks ---
    double atr  = GetIndicatorValue(hATR, 1);
-   double spread = symInfo.Spread() * symInfo.Point();
    if (atr < InpMinATR || atr > InpMaxATR) return;
    if ((double)symInfo.Spread() > InpMaxSpread) return;
 
@@ -254,8 +242,8 @@ void OnTick() {
    IndicatorData data;
    if (!LoadIndicators(data)) return;
 
-   // --- Kalman filter price ---
-   double kPrice = InpUseKalman ? KalmanFilter(data.close) : data.close;
+   // --- Kalman filter price (KalmanFilterWithPrev updates g_kalmanPrevX for direction detection) ---
+   double kPrice = InpUseKalman ? KalmanFilterWithPrev(data.close) : data.close;
 
    // --- Detect market regime ---
    g_regime = DetectRegime(data);
@@ -601,7 +589,7 @@ void ManageOpenTrades() {
    for (int i = PositionsTotal()-1; i >= 0; i--) {
       if (!posInfo.SelectByIndex(i)) continue;
       if (posInfo.Symbol() != _Symbol) continue;
-      if (posInfo.Magic() != 202412)   continue;
+      if (posInfo.Magic() != InpMagicNumber) continue;
 
       ulong  ticket    = posInfo.Ticket();
       int    dir       = (posInfo.PositionType() == POSITION_TYPE_BUY) ? 1 : -1;
@@ -727,7 +715,7 @@ void UpdateSelfCorrection() {
 
    for (int i = total-1; i >= 0 && count < InpSCLookback; i--) {
       ulong ticket = HistoryDealGetTicket(i);
-      if (HistoryDealGetInteger(ticket, DEAL_MAGIC) != 202412) continue;
+      if (HistoryDealGetInteger(ticket, DEAL_MAGIC) != InpMagicNumber) continue;
       if (HistoryDealGetInteger(ticket, DEAL_ENTRY) != DEAL_ENTRY_OUT) continue;
       double pnl = HistoryDealGetDouble(ticket, DEAL_PROFIT);
       if (pnl > 0) { wins++; grossProfit += pnl; }
@@ -887,7 +875,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    if (trans.type == TRADE_TRANSACTION_DEAL_ADD) {
       ulong dealTicket = trans.deal;
       if (!HistoryDealSelect(dealTicket)) return;
-      if (HistoryDealGetInteger(dealTicket, DEAL_MAGIC) != 202412) return;
+      if (HistoryDealGetInteger(dealTicket, DEAL_MAGIC) != InpMagicNumber) return;
       if (HistoryDealGetInteger(dealTicket, DEAL_ENTRY) != DEAL_ENTRY_OUT) return;
 
       double pnl = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);

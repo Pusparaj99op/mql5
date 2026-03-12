@@ -1,0 +1,646 @@
+//@version=6
+indicator("XAUUSD Master Scalper ⚡ MTF · Patterns · Sessions · Fib [Vantage/XM360]",
+     overlay=true,
+     max_boxes_count=500,
+     max_lines_count=500,
+     max_labels_count=500,
+     max_bars_back=5000)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                     1.  USER INPUTS & CONFIGURATION                    ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+// ── General ──────────────────────────────────────────────────────────────
+grp_gen      = "⚙️ General Settings"
+brokerInfo   = input.string("Vantage / XM360", "Broker Reference", group=grp_gen,
+     tooltip="Informational. Ensure you are on XAUUSD from Vantage or XM360.")
+showDash     = input.bool(true, "Show Dashboard Panel", group=grp_gen)
+showLabels   = input.bool(true, "Show Price Labels", group=grp_gen)
+
+// ── MTF ──────────────────────────────────────────────────────────────────
+grp_mtf      = "📊 Multi-Timeframe"
+htf1         = input.timeframe("5",   "MTF Level 1", group=grp_mtf)
+htf2         = input.timeframe("15",  "MTF Level 2", group=grp_mtf)
+htf3         = input.timeframe("60",  "MTF Level 3 (1H)", group=grp_mtf)
+htf4         = input.timeframe("240", "MTF Level 4 (4H)", group=grp_mtf)
+
+// ── SMA & EMA ────────────────────────────────────────────────────────────
+grp_ma       = "📈 Moving Averages"
+showSMA      = input.bool(true, "Show SMA Lines", group=grp_ma)
+smaLen1      = input.int(20,  "SMA Fast Length",   group=grp_ma)
+smaLen2      = input.int(50,  "SMA Medium Length",  group=grp_ma)
+smaLen3      = input.int(200, "SMA Slow Length",    group=grp_ma)
+showEMA      = input.bool(true, "Show EMA Lines", group=grp_ma)
+emaLen1      = input.int(9,   "EMA Fast Length",   group=grp_ma)
+emaLen2      = input.int(21,  "EMA Slow Length",   group=grp_ma)
+
+// ── Sessions ─────────────────────────────────────────────────────────────
+grp_sess     = "🌍 Market Sessions (World Server Time)"
+sessTz       = input.string("UTC+0", "Server Timezone", group=grp_sess,
+     options=["UTC-5","UTC-4","UTC-3","UTC-2","UTC-1","UTC+0","UTC+1","UTC+2","UTC+3","UTC+4","UTC+5","UTC+5:30","UTC+6","UTC+7","UTC+8","UTC+9","UTC+10","UTC+11","UTC+12"],
+     tooltip="Match this to your broker's server time. Vantage = UTC+2/+3, XM = UTC+2/+3.")
+showSessions = input.bool(true, "Show Session Highlights", group=grp_sess)
+sydneySess   = input.session("2200-0700", "Sydney Session",  group=grp_sess)
+tokyoSess    = input.session("0000-0900", "Tokyo Session",   group=grp_sess)
+londonSess   = input.session("0800-1700", "London Session",  group=grp_sess)
+nySess       = input.session("1300-2200", "New York Session", group=grp_sess)
+
+// ── Fibonacci ────────────────────────────────────────────────────────────
+grp_fib      = "🔢 Fibonacci Levels"
+showFib      = input.bool(true, "Show Fibonacci Levels", group=grp_fib)
+pivotLeft    = input.int(5, "Pivot Left Bars",  group=grp_fib, minval=2)
+pivotRight   = input.int(3, "Pivot Right Bars", group=grp_fib, minval=1)
+fibR1        = input.float(0.236, "Fib Level 1", group=grp_fib)
+fibR2        = input.float(0.382, "Fib Level 2", group=grp_fib)
+fibR3        = input.float(0.5,   "Fib Level 3", group=grp_fib)
+fibR4        = input.float(0.618, "Fib Level 4 (Golden)", group=grp_fib)
+fibR5        = input.float(0.786, "Fib Level 5", group=grp_fib)
+fibExt1      = input.float(1.272, "Fib Extension 1", group=grp_fib)
+fibExt2      = input.float(1.618, "Fib Extension 2", group=grp_fib)
+
+// ── Expected Moves / SL-TP ───────────────────────────────────────────────
+grp_exp      = "🎯 Expected Moves & SL/TP"
+showExpected = input.bool(true, "Show Expected Move Zones", group=grp_exp)
+slBuffer     = input.float(1.0, "SL Buffer (Points)", group=grp_exp, tooltip="1 point = ~$1 per 0.01 lot on XAUUSD")
+
+// ── Chart Patterns ───────────────────────────────────────────────────────
+grp_pat      = "🏗️ Chart Patterns Detection"
+showPatterns = input.bool(true, "Show Chart Patterns", group=grp_pat)
+patLookback  = input.int(50, "Pattern Lookback Bars", group=grp_pat, minval=20, maxval=200)
+
+// ── RSI & VWAP ──────────────────────────────────────────────────────────
+grp_extra    = "🧪 Extra Indicators"
+showRSIDiv   = input.bool(true, "Show RSI Divergence Signals", group=grp_extra)
+rsiLen       = input.int(14, "RSI Length", group=grp_extra)
+showVWAP     = input.bool(true, "Show VWAP", group=grp_extra)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    2.  MOVING AVERAGES (SMA + EMA)                     ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+sma20  = ta.sma(close, smaLen1)
+sma50  = ta.sma(close, smaLen2)
+sma200 = ta.sma(close, smaLen3)
+ema9   = ta.ema(close, emaLen1)
+ema21  = ta.ema(close, emaLen2)
+
+// Current TF plots
+plot(showSMA ? sma20  : na, "SMA 20",  color=color.new(#00BCD4, 20), linewidth=1)
+plot(showSMA ? sma50  : na, "SMA 50",  color=color.new(#FF9800, 20), linewidth=2)
+plot(showSMA ? sma200 : na, "SMA 200", color=color.new(#E91E63, 20), linewidth=3)
+plot(showEMA ? ema9   : na, "EMA 9",   color=color.new(#7C4DFF, 30), linewidth=1, style=plot.style_circles)
+plot(showEMA ? ema21  : na, "EMA 21",  color=color.new(#00E676, 30), linewidth=1, style=plot.style_circles)
+
+// SMA Crossovers
+smaFastCrossBull = ta.crossover(sma20, sma50)
+smaFastCrossBear = ta.crossunder(sma20, sma50)
+emaCrossBull     = ta.crossover(ema9, ema21)
+emaCrossBear     = ta.crossunder(ema9, ema21)
+
+plotshape(smaFastCrossBull, "SMA Bull Cross", shape.diamond, location.belowbar, color.new(#00E676, 0), size=size.small)
+plotshape(smaFastCrossBear, "SMA Bear Cross", shape.diamond, location.abovebar, color.new(#FF1744, 0), size=size.small)
+plotshape(emaCrossBull, "EMA Bull Cross", shape.circle, location.belowbar, color.new(#69F0AE, 0), size=size.tiny)
+plotshape(emaCrossBear, "EMA Bear Cross", shape.circle, location.abovebar, color.new(#FF8A80, 0), size=size.tiny)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    3.  MULTI-TIMEFRAME (MTF) DATA                      ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+// HTF SMAs
+sma50_htf1 = request.security(syminfo.tickerid, htf1, ta.sma(close, smaLen2), lookahead=barmerge.lookahead_on)
+sma50_htf2 = request.security(syminfo.tickerid, htf2, ta.sma(close, smaLen2), lookahead=barmerge.lookahead_on)
+sma50_htf3 = request.security(syminfo.tickerid, htf3, ta.sma(close, smaLen2), lookahead=barmerge.lookahead_on)
+sma50_htf4 = request.security(syminfo.tickerid, htf4, ta.sma(close, smaLen2), lookahead=barmerge.lookahead_on)
+
+// HTF Close for trend
+close_htf1 = request.security(syminfo.tickerid, htf1, close, lookahead=barmerge.lookahead_on)
+close_htf2 = request.security(syminfo.tickerid, htf2, close, lookahead=barmerge.lookahead_on)
+close_htf3 = request.security(syminfo.tickerid, htf3, close, lookahead=barmerge.lookahead_on)
+close_htf4 = request.security(syminfo.tickerid, htf4, close, lookahead=barmerge.lookahead_on)
+
+// HTF Trend (above or below SMA50)
+trend_htf1 = close_htf1 > sma50_htf1
+trend_htf2 = close_htf2 > sma50_htf2
+trend_htf3 = close_htf3 > sma50_htf3
+trend_htf4 = close_htf4 > sma50_htf4
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    4.  MARKET SESSIONS (World Time)                     ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+f_inSession(sess) =>
+    not na(time(timeframe.period, sess, sessTz))
+
+sydneyActive = f_inSession(sydneySess)
+tokyoActive  = f_inSession(tokyoSess)
+londonActive = f_inSession(londonSess)
+nyActive     = f_inSession(nySess)
+
+// Session Background Colors (very subtle)
+bgcolor(showSessions and sydneyActive ? color.new(#9C27B0, 96) : na, title="Sydney BG")
+bgcolor(showSessions and tokyoActive  ? color.new(#607D8B, 95) : na, title="Tokyo BG")
+bgcolor(showSessions and londonActive ? color.new(#2196F3, 95) : na, title="London BG")
+bgcolor(showSessions and nyActive     ? color.new(#F44336, 95) : na, title="New York BG")
+
+// Session Transitions (vertical line on session open)
+sydneyStart = sydneyActive and not sydneyActive[1]
+tokyoStart  = tokyoActive  and not tokyoActive[1]
+londonStart = londonActive and not londonActive[1]
+nyStart     = nyActive     and not nyActive[1]
+
+if showSessions and sydneyStart and showLabels
+    label.new(bar_index, high, "🦘 SYDNEY", color=color.new(#9C27B0, 70), textcolor=#CE93D8, style=label.style_label_down, size=size.tiny)
+
+if showSessions and tokyoStart and showLabels
+    label.new(bar_index, high, "🏯 TOKYO", color=color.new(#607D8B, 70), textcolor=#B0BEC5, style=label.style_label_down, size=size.tiny)
+
+if showSessions and londonStart and showLabels
+    label.new(bar_index, high, "🏛️ LONDON", color=color.new(#2196F3, 70), textcolor=#90CAF9, style=label.style_label_down, size=size.tiny)
+
+if showSessions and nyStart and showLabels
+    label.new(bar_index, high, "🗽 NEW YORK", color=color.new(#F44336, 70), textcolor=#EF9A9A, style=label.style_label_down, size=size.tiny)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    5.  PIVOT DETECTION & FIBONACCI                      ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+ph = ta.pivothigh(high, pivotLeft, pivotRight)
+pl = ta.pivotlow(low,   pivotLeft, pivotRight)
+
+var float lastPH     = na
+var float lastPL     = na
+var int   lastPH_bar = na
+var int   lastPL_bar = na
+
+if not na(ph)
+    lastPH     := ph
+    lastPH_bar := bar_index - pivotRight
+if not na(pl)
+    lastPL     := pl
+    lastPL_bar := bar_index - pivotRight
+
+// Swing markers
+plotshape(not na(ph) ? ph : na, "⬇ Swing High", shape.triangledown, location.absolute, color.new(#FF1744, 0), size=size.tiny, offset=-pivotRight)
+plotshape(not na(pl) ? pl : na, "⬆ Swing Low",  shape.triangleup,   location.absolute, color.new(#00E676, 0), size=size.tiny, offset=-pivotRight)
+
+// ── Fibonacci Retracement Lines ──────────────────────────────────────────
+var line[] fibLines = array.new_line()
+var label[] fibLbls = array.new_label()
+
+f_drawFibLevels(float highP, float lowP, int startX) =>
+    dist = highP - lowP
+    fibLevels = array.from(fibR1, fibR2, fibR3, fibR4, fibR5)
+    fibColors = array.from(#4FC3F7, #29B6F6, #03A9F4, #FFD600, #FF6D00)
+
+    for i = 0 to array.size(fibLevels) - 1
+        level = highP - dist * array.get(fibLevels, i)
+        clr = array.get(fibColors, i)
+        ln = line.new(startX, level, bar_index + 10, level, color=color.new(clr, 40), style=line.style_dotted, width=1)
+        array.push(fibLines, ln)
+        if showLabels
+            lb = label.new(bar_index + 11, level, str.tostring(array.get(fibLevels, i), "#.###") + " (" + str.tostring(level, "#.##") + ")",
+                 color=color.new(clr, 85), textcolor=clr, style=label.style_label_left, size=size.tiny)
+            array.push(fibLbls, lb)
+
+    // Extensions
+    ext1Level = lowP - dist * (fibExt1 - 1.0)
+    ext2Level = lowP - dist * (fibExt2 - 1.0)
+    ext1Up    = highP + dist * (fibExt1 - 1.0)
+    ext2Up    = highP + dist * (fibExt2 - 1.0)
+
+    ln1 = line.new(startX, ext1Up, bar_index + 10, ext1Up, color=color.new(#00E676, 50), style=line.style_dashed, width=1)
+    ln2 = line.new(startX, ext2Up, bar_index + 10, ext2Up, color=color.new(#76FF03, 50), style=line.style_dashed, width=1)
+    ln3 = line.new(startX, ext1Level, bar_index + 10, ext1Level, color=color.new(#FF1744, 50), style=line.style_dashed, width=1)
+    ln4 = line.new(startX, ext2Level, bar_index + 10, ext2Level, color=color.new(#D50000, 50), style=line.style_dashed, width=1)
+    array.push(fibLines, ln1)
+    array.push(fibLines, ln2)
+    array.push(fibLines, ln3)
+    array.push(fibLines, ln4)
+
+// Clean up old fib drawings & redraw
+if showFib and barstate.islast and not na(lastPH) and not na(lastPL)
+    // Delete old lines/labels (guard: Pine for 0 to -1 still runs once)
+    if array.size(fibLines) > 0
+        for i = 0 to array.size(fibLines) - 1
+            line.delete(array.get(fibLines, i))
+        array.clear(fibLines)
+    if array.size(fibLbls) > 0
+        for i = 0 to array.size(fibLbls) - 1
+            label.delete(array.get(fibLbls, i))
+        array.clear(fibLbls)
+
+    startBar = math.max(nz(lastPH_bar, bar_index - 20), nz(lastPL_bar, bar_index - 20))
+    f_drawFibLevels(lastPH, lastPL, startBar)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    6.  EXPECTED MOVES & SL/TP                          ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+var line slLine   = na
+var line tp1Line  = na
+var line tp2Line  = na
+var label slLbl   = na
+var label tp1Lbl  = na
+var label tp2Lbl  = na
+var box  slZone   = na
+var box  tp1Zone  = na
+
+// ATR-based expected move
+atr14 = ta.atr(14)
+
+if showExpected and barstate.islast and not na(lastPH) and not na(lastPL)
+    line.delete(slLine)
+    line.delete(tp1Line)
+    line.delete(tp2Line)
+    label.delete(slLbl)
+    label.delete(tp1Lbl)
+    label.delete(tp2Lbl)
+    box.delete(slZone)
+    box.delete(tp1Zone)
+
+    fibDist = lastPH - lastPL
+    isBullish = close > sma50
+
+    if isBullish
+        // Long scenario
+        entrySL  = lastPL - slBuffer
+        entryTP1 = close + fibDist * fibR4
+        entryTP2 = close + fibDist * fibExt1
+        expectedUp = close + atr14 * 1.5
+
+        slLine  := line.new(bar_index - 5, entrySL, bar_index + 15, entrySL, color=#FF1744, style=line.style_solid, width=2)
+        tp1Line := line.new(bar_index - 5, entryTP1, bar_index + 15, entryTP1, color=#00E676, style=line.style_solid, width=2)
+        tp2Line := line.new(bar_index - 5, entryTP2, bar_index + 15, entryTP2, color=#76FF03, style=line.style_dashed, width=1)
+
+        slZone  := box.new(bar_index - 5, close, bar_index + 15, entrySL, border_color=color.new(#FF1744, 80), bgcolor=color.new(#FF1744, 93))
+        tp1Zone := box.new(bar_index - 5, close, bar_index + 15, entryTP1, border_color=color.new(#00E676, 80), bgcolor=color.new(#00E676, 93))
+
+        if showLabels
+            slLbl  := label.new(bar_index + 16, entrySL, "SL: " + str.tostring(entrySL, "#.##"), color=color.new(#FF1744, 70), textcolor=#FF8A80, style=label.style_label_left, size=size.small)
+            tp1Lbl := label.new(bar_index + 16, entryTP1, "TP1: " + str.tostring(entryTP1, "#.##") + " (0.618)", color=color.new(#00E676, 70), textcolor=#69F0AE, style=label.style_label_left, size=size.small)
+            tp2Lbl := label.new(bar_index + 16, entryTP2, "TP2: " + str.tostring(entryTP2, "#.##") + " (1.272)", color=color.new(#76FF03, 70), textcolor=#B2FF59, style=label.style_label_left, size=size.small)
+    else
+        // Short scenario
+        entrySL  = lastPH + slBuffer
+        entryTP1 = close - fibDist * fibR4
+        entryTP2 = close - fibDist * fibExt1
+
+        slLine  := line.new(bar_index - 5, entrySL, bar_index + 15, entrySL, color=#FF1744, style=line.style_solid, width=2)
+        tp1Line := line.new(bar_index - 5, entryTP1, bar_index + 15, entryTP1, color=#00E676, style=line.style_solid, width=2)
+        tp2Line := line.new(bar_index - 5, entryTP2, bar_index + 15, entryTP2, color=#76FF03, style=line.style_dashed, width=1)
+
+        slZone  := box.new(bar_index - 5, entrySL, bar_index + 15, close, border_color=color.new(#FF1744, 80), bgcolor=color.new(#FF1744, 93))
+        tp1Zone := box.new(bar_index - 5, entryTP1, bar_index + 15, close, border_color=color.new(#00E676, 80), bgcolor=color.new(#00E676, 93))
+
+        if showLabels
+            slLbl  := label.new(bar_index + 16, entrySL, "SL: " + str.tostring(entrySL, "#.##"), color=color.new(#FF1744, 70), textcolor=#FF8A80, style=label.style_label_left, size=size.small)
+            tp1Lbl := label.new(bar_index + 16, entryTP1, "TP1: " + str.tostring(entryTP1, "#.##") + " (0.618)", color=color.new(#00E676, 70), textcolor=#69F0AE, style=label.style_label_left, size=size.small)
+            tp2Lbl := label.new(bar_index + 16, entryTP2, "TP2: " + str.tostring(entryTP2, "#.##") + " (1.272)", color=color.new(#76FF03, 70), textcolor=#B2FF59, style=label.style_label_left, size=size.small)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    7.  CHART PATTERNS DETECTION                        ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+// ── Helper Arrays for Pivot Tracking ─────────────────────────────────────
+var float[] swingHighs    = array.new_float(0)
+var int[]   swingHighBars = array.new_int(0)
+var float[] swingLows     = array.new_float(0)
+var int[]   swingLowBars  = array.new_int(0)
+
+if not na(ph)
+    array.unshift(swingHighs, ph)
+    array.unshift(swingHighBars, bar_index - pivotRight)
+    if array.size(swingHighs) > 10
+        array.pop(swingHighs)
+        array.pop(swingHighBars)
+
+if not na(pl)
+    array.unshift(swingLows, pl)
+    array.unshift(swingLowBars, bar_index - pivotRight)
+    if array.size(swingLows) > 10
+        array.pop(swingLows)
+        array.pop(swingLowBars)
+
+// ── Double Top ───────────────────────────────────────────────────────────
+f_doubleTop() =>
+    detected = false
+    if showPatterns and array.size(swingHighs) >= 2 and array.size(swingLows) >= 1
+        h1 = array.get(swingHighs, 0)
+        h2 = array.get(swingHighs, 1)
+        tolerance = nz(atr14, 1.0) * 0.3
+        if math.abs(h1 - h2) < tolerance
+            neckline = array.get(swingLows, 0)
+            if neckline < h1 - nz(atr14, 1.0)
+                detected := true
+    detected
+
+doubleTopDetected = f_doubleTop()
+
+if doubleTopDetected and not na(ph) and array.size(swingHighs) >= 2 and array.size(swingHighBars) >= 2
+    h1 = array.get(swingHighs, 0)
+    b1 = array.get(swingHighBars, 0)
+    h2 = array.get(swingHighs, 1)
+    b2 = array.get(swingHighBars, 1)
+    line.new(b2, h2, b1, h1, color=#FF1744, width=2, style=line.style_solid)
+    label.new(b1, h1 + nz(atr14, 1.0) * 0.5, "🔻 DOUBLE TOP", color=color.new(#FF1744, 70), textcolor=#FF8A80, style=label.style_label_down, size=size.small)
+
+// ── Double Bottom ────────────────────────────────────────────────────────
+f_doubleBottom() =>
+    detected = false
+    if showPatterns and array.size(swingLows) >= 2 and array.size(swingHighs) >= 1
+        l1 = array.get(swingLows, 0)
+        l2 = array.get(swingLows, 1)
+        tolerance = nz(atr14, 1.0) * 0.3
+        if math.abs(l1 - l2) < tolerance
+            neckline = array.get(swingHighs, 0)
+            if neckline > l1 + nz(atr14, 1.0)
+                detected := true
+    detected
+
+doubleBottomDetected = f_doubleBottom()
+
+if doubleBottomDetected and not na(pl) and array.size(swingLows) >= 2 and array.size(swingLowBars) >= 2
+    l1 = array.get(swingLows, 0)
+    b1 = array.get(swingLowBars, 0)
+    l2 = array.get(swingLows, 1)
+    b2 = array.get(swingLowBars, 1)
+    line.new(b2, l2, b1, l1, color=#00E676, width=2, style=line.style_solid)
+    label.new(b1, l1 - nz(atr14, 1.0) * 0.5, "🔺 DOUBLE BOTTOM", color=color.new(#00E676, 70), textcolor=#69F0AE, style=label.style_label_up, size=size.small)
+
+// ── Higher Highs / Lower Lows (Trend Structure) ─────────────────────────
+f_higherHigh() =>
+    if array.size(swingHighs) >= 2
+        array.get(swingHighs, 0) > array.get(swingHighs, 1)
+    else
+        false
+
+f_lowerLow() =>
+    if array.size(swingLows) >= 2
+        array.get(swingLows, 0) < array.get(swingLows, 1)
+    else
+        false
+
+// ── Ascending Triangle ───────────────────────────────────────────────────
+f_ascTriangle() =>
+    detected = false
+    if showPatterns and array.size(swingHighs) >= 2 and array.size(swingLows) >= 2
+        h1 = array.get(swingHighs, 0)
+        h2 = array.get(swingHighs, 1)
+        l1 = array.get(swingLows, 0)
+        l2 = array.get(swingLows, 1)
+        tolerance = nz(atr14, 1.0) * 0.3
+        // Flat highs + rising lows
+        if math.abs(h1 - h2) < tolerance and l1 > l2 + tolerance
+            detected := true
+    detected
+
+ascTriDetected = f_ascTriangle()
+
+if ascTriDetected and not na(ph)
+    label.new(bar_index - pivotRight, high[pivotRight] + atr14 * 0.3, "📐 ASC △", color=color.new(#00BCD4, 70), textcolor=#80DEEA, style=label.style_label_down, size=size.small)
+
+// ── Descending Triangle ──────────────────────────────────────────────────
+f_descTriangle() =>
+    detected = false
+    if showPatterns and array.size(swingHighs) >= 2 and array.size(swingLows) >= 2
+        h1 = array.get(swingHighs, 0)
+        h2 = array.get(swingHighs, 1)
+        l1 = array.get(swingLows, 0)
+        l2 = array.get(swingLows, 1)
+        tolerance = nz(atr14, 1.0) * 0.3
+        // Falling highs + flat lows
+        if h1 < h2 - tolerance and math.abs(l1 - l2) < tolerance
+            detected := true
+    detected
+
+descTriDetected = f_descTriangle()
+
+if descTriDetected and not na(pl)
+    label.new(bar_index - pivotRight, low[pivotRight] - atr14 * 0.3, "📐 DESC ▽", color=color.new(#FF9800, 70), textcolor=#FFCC80, style=label.style_label_up, size=size.small)
+
+// ── Bullish / Bearish Engulfing ──────────────────────────────────────────
+bullEngulf = close[1] < open[1] and close > open and close > open[1] and open < close[1]
+bearEngulf = close[1] > open[1] and close < open and close < open[1] and open > close[1]
+
+plotshape(showPatterns and bullEngulf, "Bull Engulf", shape.arrowup, location.belowbar, color.new(#00E676, 0), size=size.small)
+plotshape(showPatterns and bearEngulf, "Bear Engulf", shape.arrowdown, location.abovebar, color.new(#FF1744, 0), size=size.small)
+
+// ── Morning / Evening Star ───────────────────────────────────────────────
+morningStar = close[2] < open[2] and math.abs(close[1] - open[1]) < (high[1] - low[1]) * 0.3 and close > open and close > (open[2] + close[2]) / 2
+eveningStar = close[2] > open[2] and math.abs(close[1] - open[1]) < (high[1] - low[1]) * 0.3 and close < open and close < (open[2] + close[2]) / 2
+
+plotshape(showPatterns and morningStar, "⭐ Morning Star", shape.labelup, location.belowbar, color.new(#FFD600, 30), text="★", textcolor=#FFD600, size=size.tiny)
+plotshape(showPatterns and eveningStar, "⭐ Evening Star", shape.labeldown, location.abovebar, color.new(#FF6D00, 30), text="★", textcolor=#FF6D00, size=size.tiny)
+
+// ── Hammer / Shooting Star ───────────────────────────────────────────────
+bodySize = math.abs(close - open)
+upperWick = high - math.max(close, open)
+lowerWick = math.min(close, open) - low
+totalRange = high - low
+
+hammer = lowerWick > bodySize * 2 and upperWick < bodySize * 0.5 and totalRange > nz(atr14, 1.0) * 0.5
+shootingStar = upperWick > bodySize * 2 and lowerWick < bodySize * 0.5 and totalRange > nz(atr14, 1.0) * 0.5
+
+plotshape(showPatterns and hammer, "🔨 Hammer", shape.labelup, location.belowbar, color.new(#00BCD4, 30), text="H", textcolor=#00BCD4, size=size.tiny)
+plotshape(showPatterns and shootingStar, "💫 Shooting Star", shape.labeldown, location.abovebar, color.new(#FF5722, 30), text="S", textcolor=#FF5722, size=size.tiny)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    8.  RSI DIVERGENCE SIGNALS                          ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+rsi = ta.rsi(close, rsiLen)
+
+// Bullish RSI Divergence: price lower low, RSI higher low
+// Note: Pine does NOT short-circuit 'and', so we must use nested if to guard array.get()
+var bool bullRSIDiv = false
+bullRSIDiv := false
+if showRSIDiv and array.size(swingLows) >= 2
+    if array.get(swingLows, 0) < array.get(swingLows, 1) and rsi > rsi[5] and rsi < 35
+        bullRSIDiv := true
+
+// Bearish RSI Divergence: price higher high, RSI lower high
+var bool bearRSIDiv = false
+bearRSIDiv := false
+if showRSIDiv and array.size(swingHighs) >= 2
+    if array.get(swingHighs, 0) > array.get(swingHighs, 1) and rsi < rsi[5] and rsi > 65
+        bearRSIDiv := true
+
+plotshape(bullRSIDiv and not na(pl), "RSI Bull Div", shape.cross, location.belowbar, color.new(#00BCD4, 0), size=size.tiny)
+plotshape(bearRSIDiv and not na(ph), "RSI Bear Div", shape.cross, location.abovebar, color.new(#FF9800, 0), size=size.tiny)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    9.  VWAP                                            ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+vwapValue = ta.vwap(hlc3)
+plot(showVWAP ? vwapValue : na, "VWAP", color=color.new(#FFC107, 30), linewidth=2, style=plot.style_stepline)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    10.  CONFLUENCE SCORE ENGINE                         ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+// Score: each condition = +1 for bull or -1 for bear
+var float conflScore = 0.0
+
+fScore_sma    = close > sma50 ? 1.0 : -1.0
+fScore_ema    = ema9 > ema21 ? 1.0 : -1.0
+fScore_htf1   = trend_htf1 ? 1.0 : -1.0
+fScore_htf2   = trend_htf2 ? 1.0 : -1.0
+fScore_htf3   = trend_htf3 ? 1.0 : -1.0
+fScore_htf4   = trend_htf4 ? 1.0 : -1.0
+fScore_vwap   = close > vwapValue ? 1.0 : -1.0
+fScore_rsi    = rsi > 50 ? 1.0 : rsi < 50 ? -1.0 : 0.0
+fScore_struct = f_higherHigh() ? 1.0 : f_lowerLow() ? -1.0 : 0.0
+
+conflScore := fScore_sma + fScore_ema + fScore_htf1 + fScore_htf2 + fScore_htf3 + fScore_htf4 + fScore_vwap + fScore_rsi + fScore_struct
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    11.  WORLD SERVER TIME                              ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+// World Time Display — shows broker server time on chart
+f_twoDigit(val) =>
+    val < 10 ? "0" + str.tostring(val) : str.tostring(val)
+
+serverHour   = hour(time, sessTz)
+serverMinute = minute(time, sessTz)
+serverDay    = dayofweek(time, sessTz)
+
+dayNames = switch serverDay
+    dayofweek.sunday    => "SUN"
+    dayofweek.monday    => "MON"
+    dayofweek.tuesday   => "TUE"
+    dayofweek.wednesday => "WED"
+    dayofweek.thursday  => "THU"
+    dayofweek.friday    => "FRI"
+    dayofweek.saturday  => "SAT"
+    => "---"
+
+worldTimeStr = dayNames + " " + f_twoDigit(serverHour) + ":" + f_twoDigit(serverMinute) + " " + sessTz
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    12.  PROFESSIONAL DASHBOARD                         ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+if showDash and barstate.islast
+    var table dash = table.new(position.top_right, 3, 16,
+         bgcolor=color.new(#0D1117, 5),
+         border_color=color.new(#30363D, 50),
+         border_width=1,
+         frame_color=color.new(#58A6FF, 50),
+         frame_width=2)
+
+    headerBg  = color.new(#161B22, 0)
+    rowBg     = color.new(#0D1117, 10)
+    headerTxt = #58A6FF
+    labelTxt  = #8B949E
+
+    // ── Header ────────────────────────────────────
+    table.cell(dash, 0, 0, "⚡ XAUUSD MASTER ", text_color=#FFD600, bgcolor=headerBg, text_size=size.normal, text_halign=text.align_left)
+    table.cell(dash, 1, 0, brokerInfo, text_color=#58A6FF, bgcolor=headerBg, text_size=size.small)
+    table.cell(dash, 2, 0, worldTimeStr, text_color=#FFC107, bgcolor=headerBg, text_size=size.small, text_halign=text.align_right)
+
+    // ── Row 1: Current Price ──────────────────────
+    table.cell(dash, 0, 1, "💰 Price", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    priceClr = close > open ? #00E676 : #FF1744
+    table.cell(dash, 1, 1, str.tostring(close, "#.##"), text_color=priceClr, bgcolor=rowBg, text_size=size.small)
+    chgPct = (close - close[1]) / close[1] * 100
+    table.cell(dash, 2, 1, (chgPct >= 0 ? "+" : "") + str.tostring(chgPct, "#.##") + "%", text_color=chgPct >= 0 ? #00E676 : #FF1744, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    // ── Row 2: Spread/ATR ─────────────────────────
+    table.cell(dash, 0, 2, "📏 ATR(14)", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 2, str.tostring(atr14, "#.##"), text_color=#B0BEC5, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 2, "Pts", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    // ── Row 3: Session ────────────────────────────
+    table.cell(dash, 0, 3, "🌍 Session", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    currentSess = nyActive ? "🗽 New York" : londonActive ? "🏛️ London" : tokyoActive ? "🏯 Tokyo" : sydneyActive ? "🦘 Sydney" : "💤 Off-Hours"
+    sessClr = nyActive ? #F44336 : londonActive ? #2196F3 : tokyoActive ? #607D8B : sydneyActive ? #9C27B0 : #616161
+    table.cell(dash, 1, 3, currentSess, text_color=sessClr, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 3, "", bgcolor=rowBg)
+
+    // ── Row 4: Separator ──────────────────────────
+    table.cell(dash, 0, 4, "─── MTF TREND ───", text_color=color.new(headerTxt, 40), bgcolor=headerBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 4, "", bgcolor=headerBg)
+    table.cell(dash, 2, 4, "", bgcolor=headerBg)
+
+    // ── Row 5-8: MTF Trend ────────────────────────
+    table.cell(dash, 0, 5, htf1, text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 5, trend_htf1 ? "▲ BULL" : "▼ BEAR", text_color=trend_htf1 ? #00E676 : #FF1744, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 5, str.tostring(sma50_htf1, "#.##"), text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    table.cell(dash, 0, 6, htf2, text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 6, trend_htf2 ? "▲ BULL" : "▼ BEAR", text_color=trend_htf2 ? #00E676 : #FF1744, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 6, str.tostring(sma50_htf2, "#.##"), text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    table.cell(dash, 0, 7, htf3, text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 7, trend_htf3 ? "▲ BULL" : "▼ BEAR", text_color=trend_htf3 ? #00E676 : #FF1744, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 7, str.tostring(sma50_htf3, "#.##"), text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    table.cell(dash, 0, 8, htf4, text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 8, trend_htf4 ? "▲ BULL" : "▼ BEAR", text_color=trend_htf4 ? #00E676 : #FF1744, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 8, str.tostring(sma50_htf4, "#.##"), text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    // ── Row 9: Separator ──────────────────────────
+    table.cell(dash, 0, 9, "─── SIGNALS ─────", text_color=color.new(headerTxt, 40), bgcolor=headerBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 9, "", bgcolor=headerBg)
+    table.cell(dash, 2, 9, "", bgcolor=headerBg)
+
+    // ── Row 10: SMA Trend ─────────────────────────
+    table.cell(dash, 0, 10, "SMA Stack", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    smaStackBull = sma20 > sma50 and sma50 > sma200
+    smaStackBear = sma20 < sma50 and sma50 < sma200
+    smaStackTxt  = smaStackBull ? "✅ PERFECT BULL" : smaStackBear ? "❌ PERFECT BEAR" : "⚠️ MIXED"
+    smaStackClr  = smaStackBull ? #00E676 : smaStackBear ? #FF1744 : #FFC107
+    table.cell(dash, 1, 10, smaStackTxt, text_color=smaStackClr, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 10, "", bgcolor=rowBg)
+
+    // ── Row 11: RSI ───────────────────────────────
+    table.cell(dash, 0, 11, "RSI(" + str.tostring(rsiLen) + ")", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    rsiClr = rsi > 70 ? #FF1744 : rsi < 30 ? #00E676 : #B0BEC5
+    rsiTxt = rsi > 70 ? "OB " : rsi < 30 ? "OS " : ""
+    table.cell(dash, 1, 11, rsiTxt + str.tostring(rsi, "#.#"), text_color=rsiClr, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 11, "", bgcolor=rowBg)
+
+    // ── Row 12: VWAP ──────────────────────────────
+    table.cell(dash, 0, 12, "VWAP", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 12, close > vwapValue ? "ABOVE ▲" : "BELOW ▼", text_color=close > vwapValue ? #00E676 : #FF1744, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 12, str.tostring(vwapValue, "#.##"), text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    // ── Row 13: Separator ─────────────────────────
+    table.cell(dash, 0, 13, "─── CONFLUENCE ──", text_color=color.new(headerTxt, 40), bgcolor=headerBg, text_size=size.small, text_halign=text.align_left)
+    table.cell(dash, 1, 13, "", bgcolor=headerBg)
+    table.cell(dash, 2, 13, "", bgcolor=headerBg)
+
+    // ── Row 14: Confluence Score ──────────────────
+    table.cell(dash, 0, 14, "Score", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    confClr  = conflScore >= 5 ? #00E676 : conflScore <= -5 ? #FF1744 : conflScore >= 2 ? #69F0AE : conflScore <= -2 ? #FF8A80 : #FFC107
+    confTxt  = conflScore >= 5 ? "🟢 STRONG BUY" : conflScore >= 2 ? "🟢 BUY" : conflScore <= -5 ? "🔴 STRONG SELL" : conflScore <= -2 ? "🔴 SELL" : "🟡 NEUTRAL"
+    table.cell(dash, 1, 14, confTxt, text_color=confClr, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 14, str.tostring(conflScore, "#") + "/9", text_color=confClr, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+    // ── Row 15: Structure ─────────────────────────
+    table.cell(dash, 0, 15, "Structure", text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_left)
+    structTxt = f_higherHigh() ? "HH ▲" : f_lowerLow() ? "LL ▼" : "—"
+    structClr = f_higherHigh() ? #00E676 : f_lowerLow() ? #FF1744 : #616161
+    table.cell(dash, 1, 15, structTxt, text_color=structClr, bgcolor=rowBg, text_size=size.small)
+    table.cell(dash, 2, 15, "Swing: " + str.tostring(lastPH, "#.#") + "/" + str.tostring(lastPL, "#.#"), text_color=labelTxt, bgcolor=rowBg, text_size=size.small, text_halign=text.align_right)
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    13.  ALERTS                                         ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+alertcondition(smaFastCrossBull, "SMA Bull Cross", "XAUUSD: SMA 20 crossed above SMA 50 — Bullish signal!")
+alertcondition(smaFastCrossBear, "SMA Bear Cross", "XAUUSD: SMA 20 crossed below SMA 50 — Bearish signal!")
+alertcondition(emaCrossBull, "EMA Bull Cross", "XAUUSD: EMA 9 crossed above EMA 21 — Bullish momentum!")
+alertcondition(emaCrossBear, "EMA Bear Cross", "XAUUSD: EMA 9 crossed below EMA 21 — Bearish momentum!")
+alertcondition(doubleTopDetected, "Double Top", "XAUUSD: Double Top pattern detected — Watch for reversal!")
+alertcondition(doubleBottomDetected, "Double Bottom", "XAUUSD: Double Bottom pattern detected — Watch for reversal!")
+alertcondition(bullEngulf, "Bull Engulfing", "XAUUSD: Bullish Engulfing candle detected!")
+alertcondition(bearEngulf, "Bear Engulfing", "XAUUSD: Bearish Engulfing candle detected!")
+alertcondition(conflScore >= 7, "Strong Buy Signal", "XAUUSD: Confluence score 7+ — STRONG BUY signal!")
+alertcondition(conflScore <= -7, "Strong Sell Signal", "XAUUSD: Confluence score -7 — STRONG SELL signal!")
+
+// ══════════════════════════════════════════════════════════════════════════
+// END OF INDICATOR
+// ══════════════════════════════════════════════════════════════════════════

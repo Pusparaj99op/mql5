@@ -7,7 +7,6 @@
 #property link        "https://goldstrike-ea.com"
 #property version     "3.00"
 #property description "Aggressive XAUUSD Scalper with Order Flow, Quant Analysis & Self-Correction"
-#property strict
 
 //+------------------------------------------------------------------+
 //| INCLUDES                                                          |

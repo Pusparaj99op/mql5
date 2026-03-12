@@ -2,7 +2,6 @@
 //| GoldAggressiveScalper_OF.mq5                                     |
 //| Aggressive scalper framework with DOM/tick-flow + dynamic risk    |
 //+------------------------------------------------------------------+
-#property strict
 #property version   "1.00"
 #property description "XAUUSD-only aggressive scalper with order-flow proxy + dynamic risk + chart panel"
 

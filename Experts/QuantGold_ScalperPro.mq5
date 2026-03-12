@@ -142,7 +142,7 @@ struct TP1Rec {
    bool   be;
    double openPx;
 };
-TP1Rec g_tp1[50];
+TP1Rec g_tp1[500];  // Increased from 50 — supports long EA sessions without management failure
 int    g_tp1n = 0;
 
 // Bar time

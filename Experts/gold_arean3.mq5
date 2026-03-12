@@ -6,7 +6,6 @@
 #property copyright "Advanced Trading Systems"
 #property link      ""
 #property version   "3.50"
-#property strict
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -45,7 +44,7 @@ input int InpTrailingStep = 50;                      // Trailing Step (Points)
 input group "=== TECHNICAL INDICATORS ==="
 input int InpRSIPeriod = 14;                         // RSI Period
 input int InpRSIOverbought = 70;                     // RSI Overbought Level
-input InpRSIOversold = 30;                           // RSI Oversold Level
+input int InpRSIOversold     = 30;                           // RSI Oversold Level
 input int InpEMAPeriod1 = 8;                         // Fast EMA Period
 input int InpEMAPeriod2 = 21;                        // Medium EMA Period
 input int InpEMAPeriod3 = 50;                        // Slow EMA Period
@@ -53,7 +52,7 @@ input int InpATRPeriod = 14;                         // ATR Period
 input int InpBBPeriod = 20;                          // Bollinger Bands Period
 input double InpBBDeviation = 2.0;                   // BB Deviation
 input int InpMACDFast = 12;                          // MACD Fast EMA
-input InpMACDSlow = 26;                              // MACD Slow EMA
+input int InpMACDSlow        = 26;                              // MACD Slow EMA
 input int InpMACDSignal = 9;                         // MACD Signal
 
 input group "=== ORDER FLOW ANALYSIS ==="
